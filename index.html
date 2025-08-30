@@ -35,7 +35,7 @@
     transition: transform 0.3s ease;
   }
 
-  /* Dance mode bounce */
+  /* Dance mode bounce — runs the whole song (infinite), we remove the class on audio end */
   @keyframes danceBounce {
     0%,100% { transform: translateY(0) rotate(0deg) scale(1); }
     20% { transform: translateY(-15px) rotate(-5deg) scale(1.05); }
@@ -44,7 +44,7 @@
     80% { transform: translateY(8px) rotate(3deg) scale(0.97); }
   }
   .dance {
-    animation: danceBounce 1s ease-in-out 3;
+    animation: danceBounce 1s ease-in-out infinite;
   }
 
   .hotspot{
@@ -122,7 +122,7 @@
       <source src="no.ogg" type="audio/ogg" />
     </audio>
     <audio id="voice-dance" preload="auto">
-      <source src="dancemode.mp3" type="audio/mpeg" />
+      <source src="dance mode.mp3" type="audio/mpeg" />
     </audio>
   </main>
 
@@ -138,73 +138,108 @@
   const aNo    = document.getElementById('voice-no');
   const aDance = document.getElementById('voice-dance');
 
-  let yesCount = 0;   // track consecutive YES presses
+  let yesCount = 0;        // track consecutive YES presses
   let resetTimer;
+  let danceActive = false; // prevent retrigger while song plays
 
   function vibe(ms=40){ try{ navigator.vibrate && navigator.vibrate(ms);}catch(_){} }
 
-  function playVoice(kind){
-    let src;
-    if(kind === 'yes') src = aYes;
-    else if(kind === 'no') src = aNo;
-    else if(kind === 'dance') src = aDance;
-
+  function playClip(el){
     try{
-      const clone = src.cloneNode(true);   
-      clone.volume = 1.0;                  
-      clone.play().catch(()=> {});         
+      // For Yes/No we clone so rapid taps overlap.
+      // For Dance we use the original element so we can track 'ended'.
+      if(el === aDance){
+        el.currentTime = 0;
+        el.play().catch(()=>{});
+      } else {
+        const clone = el.cloneNode(true);
+        clone.volume = 1.0;
+        clone.play().catch(()=>{});
+      }
     }catch(_){}
   }
 
-  function speak(kind){
+  function speak(kind, persist=false){
     if(kind === 'dance') {
       bubble.textContent = 'DANCE MODE!';
-      bubble.className = `bubble show yes`;
-    } else {
-      bubble.textContent = (kind === 'yes') ? 'YES!' : 'NO!';
-      bubble.className = `bubble show ${kind}`;
+      bubble.className = 'bubble show yes';
+      if(!persist){
+        clearTimeout(speak.t); speak.t = setTimeout(()=> bubble.classList.remove('show'), 1000);
+      }
+      return;
     }
-    clearTimeout(speak.t); speak.t = setTimeout(()=> bubble.classList.remove('show'), 1000);
+    bubble.textContent = (kind === 'yes') ? 'YES!' : 'NO!';
+    bubble.className = `bubble show ${kind}`;
+    clearTimeout(speak.t); speak.t = setTimeout(()=> bubble.classList.remove('show'), 800);
   }
 
   function press(kind){
-    const btn = (kind==='yes') ? yesBtn : noBtn;
     if(kind !== 'dance'){
+      const btn = (kind==='yes') ? yesBtn : noBtn;
       btn.classList.add('pressed','play');
       setTimeout(()=>btn.classList.remove('pressed','play'), 180);
     }
 
-    playVoice(kind);
-    vibe(kind==='yes' ? 30 : 60);
-    speak(kind);
+    // Audio + haptics + bubble
+    if(kind==='yes') playClip(aYes);
+    else if(kind==='no') playClip(aNo);
+    else if(kind==='dance') playClip(aDance);
 
-    if(kind === 'yes'){
+    vibe(kind==='yes' ? 30 : kind==='no' ? 60 : 120);
+    speak(kind, kind==='dance');
+
+    // Dance logic: 3 Yes in a row within 2s windows
+    if(kind === 'yes' && !danceActive){
       yesCount++;
       clearTimeout(resetTimer);
-      resetTimer = setTimeout(()=> yesCount=0, 2000); // reset if no Yes for 2s
+      resetTimer = setTimeout(()=> yesCount=0, 2000);
 
       if(yesCount === 3){
         triggerDanceMode();
         yesCount = 0;
       }
-    } else {
+    } else if (kind === 'no'){
       yesCount = 0;
     }
   }
 
   function triggerDanceMode(){
-    playVoice('dance');
+    if(danceActive) return;
+    danceActive = true;
+
+    // Start song + continuous animation
     toyImg.classList.add('dance');
-    setTimeout(()=> toyImg.classList.remove('dance'), 3500);
-    speak('dance');
-    vibe(120);
+    speak('dance', true);
+    playClip(aDance);
+
+    // When the song ends, stop the dance and clear bubble
+    const endDance = ()=>{
+      toyImg.classList.remove('dance');
+      bubble.classList.remove('show');
+      danceActive = false;
+      aDance.removeEventListener('ended', endDance);
+      aDance.removeEventListener('pause', maybeEnd); // safety
+    };
+    const maybeEnd = ()=>{
+      // If paused because it actually ended, 'ended' will also fire.
+      // This is a safety to ensure we clean up even if 'ended' didn't fire on some browsers.
+      if(aDance.currentTime >= (aDance.duration || 0) - 0.05){
+        endDance();
+      }
+    };
+
+    aDance.addEventListener('ended', endDance);
+    aDance.addEventListener('pause', maybeEnd);
   }
 
+  // Pointer & keyboard
   document.addEventListener('pointerdown', (e)=>{
     const el = e.target.closest('.hotspot');
     if(!el) return;
     e.preventDefault();
-    press(el.dataset.kind);
+    if(el.dataset.kind === 'yes' || el.dataset.kind === 'no'){
+      press(el.dataset.kind);
+    }
   });
 
   window.addEventListener('keydown', (e)=>{
@@ -214,6 +249,7 @@
     if(k==='n'){ press('no'); }
   });
 
+  // Size guard
   const wrap = document.querySelector('.wrap');
   const setSize = ()=> { wrap.style.width = Math.min(window.innerWidth*0.88, 420) + 'px'; };
   window.addEventListener('resize', setSize); setSize();

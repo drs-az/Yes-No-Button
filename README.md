@@ -61,7 +61,7 @@ To see the clickable circles while adjusting, add this CSS:
 ```
 
 ### Audio
-Replace `yes.mp3`, `no.mp3`, and `dance mode.mp3` with your own voice clips or sounds.  
+Replace `yes.mp3`, `no.mp3`, and `dancemode.mp3` with your own voice clips or sounds.  
 You can add `.ogg` versions for wider browser compatibility.
 
 ---

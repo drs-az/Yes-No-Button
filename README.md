@@ -78,4 +78,4 @@ You can add `.ogg` versions for wider browser compatibility.
 ---
 
 ## 📜 License
-Free to use and modify for fun projects. Attribution to *Bluey* creators (Ludo Studio / BBC Studios) recommended if shared publicly.
+Free to use and modify for fun projects. Attribution to *Bluey* creators (Ludo Studio / BBC Studios) -- much ❤️.

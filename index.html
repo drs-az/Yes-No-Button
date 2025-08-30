@@ -80,6 +80,7 @@
     opacity:0; pointer-events:none;
     transition:opacity .18s ease, transform .18s ease;
     will-change:transform,opacity;
+    z-index: 10;
   }
   .bubble.show{ opacity:1; transform:translateX(-50%) translateY(0); }
   .bubble.yes{ color:var(--yes); }
@@ -98,6 +99,42 @@
     100%{transform:translate(-50%,0) rotate(0)}
   }
   .hotspot.no.play { animation:waggle .25s ease; }
+
+  /* ---------- Start Overlay ---------- */
+  .overlay{
+    position:fixed; inset:0; z-index: 50;
+    background: radial-gradient(120vw 120vh at 50% -10%, var(--bg1), var(--bg2));
+    display:grid; place-items:center;
+  }
+  .overlay.hidden{ display:none; }
+  .start-box{
+    display:grid; place-items:center; gap:1rem;
+    text-align:center; cursor:pointer; user-select:none;
+    padding:1rem 1.25rem;
+    border-radius:1rem;
+    background: rgba(255,255,255,0.0); /* transparent so your PNG pops */
+  }
+  .start-art{
+    width:min(78vw, 420px);
+    height:auto;
+    display:block;
+    filter: drop-shadow(0 12px 28px rgba(0,0,0,.25));
+    animation: pop 900ms ease both;
+  }
+  .start-text{
+    font-weight:900; letter-spacing:.6px; font-size:1.15rem;
+    color:#111; background:#fff; padding:.5rem .9rem; border-radius:999px;
+    box-shadow:0 6px 18px rgba(0,0,0,.15);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pop {
+    0% { transform: scale(.9); opacity:0 }
+    100% { transform: scale(1); opacity:1 }
+  }
+  @keyframes pulse {
+    0%,100% { transform:translateY(0); }
+    50% { transform:translateY(-4px); }
+  }
 </style>
 </head>
 <body>
@@ -126,6 +163,14 @@
 
   <div class="bubble" id="bubble" aria-live="polite"></div>
 
+  <!-- Tap-to-start Overlay -->
+  <div class="overlay" id="startOverlay" role="button" tabindex="0" aria-label="Tap to start">
+    <div class="start-box">
+      <img class="start-art" src="dancemode.png" alt="Bluey and Bingo dancing" />
+      <div class="start-text">Tap to start</div>
+    </div>
+  </div>
+
 <script>
 (function(){
   const bubble = document.getElementById('bubble');
@@ -135,6 +180,7 @@
   const aYes   = document.getElementById('voice-yes');
   const aNo    = document.getElementById('voice-no');
   const aDance = document.getElementById('voice-dance');
+  const overlay = document.getElementById('startOverlay');
 
   let yesCount = 0;        // track consecutive YES presses
   let resetTimer;
@@ -145,7 +191,7 @@
 
   function vibe(ms=40){ try{ navigator.vibrate && navigator.vibrate(ms);}catch(_){} }
 
-  // One-time audio priming on first user gesture (unlocks playback on iOS/strict browsers)
+  // One-time audio priming (run from the overlay tap)
   function primeAudioOnce(){
     if (audioPrimed) return;
     audioPrimed = true;
@@ -160,9 +206,24 @@
       }catch(_){ el.muted = false; }
     });
   }
-  const primeHandler = () => { primeAudioOnce(); };
-  document.addEventListener('pointerdown', primeHandler, { once:true });
-  window.addEventListener('keydown', primeHandler, { once:true });
+
+  function hideOverlay(){
+    overlay.classList.add('hidden');
+    bubble.textContent = 'Ready!';
+    bubble.className = 'bubble show yes';
+    setTimeout(()=> bubble.classList.remove('show'), 800);
+  }
+
+  // Start app from overlay (pointer or keyboard)
+  function startApp(e){
+    e.preventDefault();
+    primeAudioOnce();
+    hideOverlay();
+  }
+  overlay.addEventListener('pointerdown', startApp);
+  overlay.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter' || e.key === ' ') startApp(e);
+  });
 
   // Play helper: original element for the first Yes/No; clones afterwards for overlap
   function playClip(el, kind){
@@ -263,6 +324,7 @@
   document.addEventListener('pointerdown', (e)=>{
     const el = e.target.closest('.hotspot');
     if(!el) return;
+    if(overlay && !overlay.classList.contains('hidden')) return; // ignore taps until started
     e.preventDefault();
     const kind = el.dataset.kind;
     if(kind === 'yes' || kind === 'no'){
@@ -271,6 +333,7 @@
   });
 
   window.addEventListener('keydown', (e)=>{
+    if(overlay && !overlay.classList.contains('hidden')) return; // ignore keys until started
     if(e.repeat) return;
     const k = e.key.toLowerCase();
     if(k==='y'){ press('yes'); }

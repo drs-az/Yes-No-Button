@@ -35,7 +35,7 @@
     transition: transform 0.3s ease;
   }
 
-  /* Dance mode bounce — runs the whole song (infinite), we remove the class on audio end */
+  /* Dance mode bounce — runs continuously; removed on audio end */
   @keyframes danceBounce {
     0%,100% { transform: translateY(0) rotate(0deg) scale(1); }
     20% { transform: translateY(-15px) rotate(-5deg) scale(1.05); }
@@ -43,9 +43,7 @@
     60% { transform: translateY(-12px) rotate(-3deg) scale(1.03); }
     80% { transform: translateY(8px) rotate(3deg) scale(0.97); }
   }
-  .dance {
-    animation: danceBounce 1s ease-in-out infinite;
-  }
+  .dance { animation: danceBounce 1s ease-in-out infinite; }
 
   .hotspot{
     position:absolute;
@@ -113,15 +111,15 @@
     <button class="hotspot no"  aria-label="No"  data-kind="no"></button>
 
     <!-- Voice clips -->
-    <audio id="voice-yes" preload="auto">
+    <audio id="voice-yes" preload="auto" playsinline>
       <source src="yes.mp3" type="audio/mpeg" />
       <source src="yes.ogg" type="audio/ogg" />
     </audio>
-    <audio id="voice-no" preload="auto">
+    <audio id="voice-no" preload="auto" playsinline>
       <source src="no.mp3" type="audio/mpeg" />
       <source src="no.ogg" type="audio/ogg" />
     </audio>
-    <audio id="voice-dance" preload="auto">
+    <audio id="voice-dance" preload="auto" playsinline>
       <source src="dancemode.mp3" type="audio/mpeg" />
     </audio>
   </main>
@@ -141,21 +139,53 @@
   let yesCount = 0;        // track consecutive YES presses
   let resetTimer;
   let danceActive = false; // prevent retrigger while song plays
+  let audioPrimed = false;
+  let firstYesPlayed = false;
+  let firstNoPlayed = false;
 
   function vibe(ms=40){ try{ navigator.vibrate && navigator.vibrate(ms);}catch(_){} }
 
-  function playClip(el){
+  // One-time audio priming on first user gesture (unlocks playback on iOS/strict browsers)
+  function primeAudioOnce(){
+    if (audioPrimed) return;
+    audioPrimed = true;
+    [aYes, aNo, aDance].forEach(el => {
+      try{
+        el.muted = true;
+        el.play().then(() => {
+          el.pause();
+          el.currentTime = 0;
+          el.muted = false;
+        }).catch(() => { el.muted = false; });
+      }catch(_){ el.muted = false; }
+    });
+  }
+  const primeHandler = () => { primeAudioOnce(); };
+  document.addEventListener('pointerdown', primeHandler, { once:true });
+  window.addEventListener('keydown', primeHandler, { once:true });
+
+  // Play helper: original element for the first Yes/No; clones afterwards for overlap
+  function playClip(el, kind){
     try{
-      // For Yes/No we clone so rapid taps overlap.
-      // For Dance we use the original element so we can track 'ended'.
-      if(el === aDance){
+      if (el === aDance){
         el.currentTime = 0;
         el.play().catch(()=>{});
-      } else {
-        const clone = el.cloneNode(true);
-        clone.volume = 1.0;
-        clone.play().catch(()=>{});
+        return;
       }
+      if (kind === 'yes' && !firstYesPlayed){
+        firstYesPlayed = true;
+        el.currentTime = 0;
+        el.play().catch(()=>{});
+        return;
+      }
+      if (kind === 'no' && !firstNoPlayed){
+        firstNoPlayed = true;
+        el.currentTime = 0;
+        el.play().catch(()=>{});
+        return;
+      }
+      const clone = el.cloneNode(true);
+      clone.play().catch(()=>{});
     }catch(_){}
   }
 
@@ -180,10 +210,9 @@
       setTimeout(()=>btn.classList.remove('pressed','play'), 180);
     }
 
-    // Audio + haptics + bubble
-    if(kind==='yes') playClip(aYes);
-    else if(kind==='no') playClip(aNo);
-    else if(kind==='dance') playClip(aDance);
+    if(kind==='yes') playClip(aYes, 'yes');
+    else if(kind==='no') playClip(aNo, 'no');
+    else if(kind==='dance') playClip(aDance, 'dance');
 
     vibe(kind==='yes' ? 30 : kind==='no' ? 60 : 120);
     speak(kind, kind==='dance');
@@ -210,19 +239,17 @@
     // Start song + continuous animation
     toyImg.classList.add('dance');
     speak('dance', true);
-    playClip(aDance);
+    playClip(aDance, 'dance');
 
-    // When the song ends, stop the dance and clear bubble
+    // Stop dancing when song ends (or safely when paused at end)
     const endDance = ()=>{
       toyImg.classList.remove('dance');
       bubble.classList.remove('show');
       danceActive = false;
       aDance.removeEventListener('ended', endDance);
-      aDance.removeEventListener('pause', maybeEnd); // safety
+      aDance.removeEventListener('pause', maybeEnd);
     };
     const maybeEnd = ()=>{
-      // If paused because it actually ended, 'ended' will also fire.
-      // This is a safety to ensure we clean up even if 'ended' didn't fire on some browsers.
       if(aDance.currentTime >= (aDance.duration || 0) - 0.05){
         endDance();
       }
@@ -237,8 +264,9 @@
     const el = e.target.closest('.hotspot');
     if(!el) return;
     e.preventDefault();
-    if(el.dataset.kind === 'yes' || el.dataset.kind === 'no'){
-      press(el.dataset.kind);
+    const kind = el.dataset.kind;
+    if(kind === 'yes' || kind === 'no'){
+      press(kind);
     }
   });
 

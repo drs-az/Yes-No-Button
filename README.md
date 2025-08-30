@@ -44,7 +44,7 @@ Place these files together in the same folder:
 ### Button Placement
 Hotspots are positioned with percentage values relative to the toy image:
 ```css
-.hotspot.yes { top:12%; }
+.hotspot.yes { top:9%; }
 .hotspot.no  { top:30%; }
 ```
 

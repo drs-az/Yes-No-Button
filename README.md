@@ -1,8 +1,11 @@
 # Yes / No Button Toy (Bluey Dance Mode Inspired)
 
 A simple web toy that recreates the **Yes / No button** from Bluey’s *Dance Mode* episode.  
-Click or tap the green or red circles on the toy image, and it will play voice clips saying **“Yes!”** or **“No!”**.  
+Click or tap the green or red circles on the toy image, and it will play voice clips saying **“Yes!”** or **“No!”**.
+
 Press **Yes three times in a row** to unlock **Dance Mode**! 🎉
+
+Try it [here](https://drs-az.github.io/Yes-No-Button/).
 
 ---
 
